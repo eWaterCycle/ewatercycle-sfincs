@@ -1,12 +1,15 @@
 """eWaterCycle wrapper for the Sfincs model."""
 from collections.abc import ItemsView
 from pathlib import Path
-from datetime import datetime
-from typing import Any
+from datetime import datetime, timezone
+import shutil
+from typing import Any, Optional
 import bmipy
 
-from ewatercycle.base.model import ContainerizedModel, eWaterCycleModel
+from ewatercycle.base.model import ContainerizedModel
 from ewatercycle.container import ContainerImage, start_container
+from ewatercycle.util import to_absolute_path
+from ewatercycle import CFG
 
 from pydantic import model_validator
 
@@ -49,9 +52,33 @@ class Sfincs(ContainerizedModel):
 
         with config_file.open(mode="w") as f:
             for key, val in self._config.items():
-                f.write(f"{key:<22} = {val}\n")
+                f.write(f"{key:<20} = {val}\n")
 
         return config_file
+
+    def _make_cfg_dir(self, cfg_dir: Optional[str] = None, **kwargs) -> Path:
+        """Create working directory for parameter sets, forcing and sfincs config."""
+        if cfg_dir:
+            work_dir = to_absolute_path(cfg_dir)
+        else:
+            timestamp = datetime.now(timezone.utc).strftime(
+                "%Y%m%d_%H%M%S"
+            )
+            work_dir = to_absolute_path(
+                f"sfincs_{timestamp}", parent=CFG.output_dir
+            )
+        # Make sure parents exist
+        work_dir.parent.mkdir(parents=True, exist_ok=True)
+
+        assert self.parameter_set
+        shutil.copytree(src=self.parameter_set.directory, dst=work_dir)
+        if self.forcing:
+            forcing_path = to_absolute_path(
+                self.forcing.netcdfinput, parent=self.forcing.directory
+            )
+            shutil.copy(src=forcing_path, dst=work_dir)
+
+        return work_dir
 
     def _iso8601toscfincs(self, iso8601: str) -> str:
         """Convert ISO8601 to SFINCS format."""
