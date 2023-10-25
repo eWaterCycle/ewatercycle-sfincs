@@ -16,6 +16,7 @@ from pydantic import model_validator
 
 class Sfincs(ContainerizedModel):
     """The Sfincs eWaterCycle model, with the Container Registry docker image."""
+
     bmi_image: ContainerImage = ContainerImage(
         "ghcr.io/ewatercycle/sfincs-bmiserver:sfincs-v2.0.2-blockhaus-release-q2-2023"
     )
@@ -35,17 +36,15 @@ class Sfincs(ContainerizedModel):
     def _make_cfg_file(self, **kwargs) -> Path:
         """Write model configuration file."""
         if self.forcing:
-            self._config["netamprfile"] = str(
-                self.forcing.directory / self.forcing.pr
-            )
+            self._config["netamprfile"] = str(self.forcing.directory / self.forcing.pr)
             # TODO add netampfile - FEWS type netcdf meteo input with atmospheric pressure in Pa.
             # TODO add netamuamvfile - FEWS type netcdf meteo input with wind speed in both x-&y-direction in m/s.
 
-        if 'start_time' in kwargs:
+        if "start_time" in kwargs:
             # convert 2020-01-01T00:00:00Z to something like 20131201 000000
-            self._config["tstart"] = self._iso8601toscfincs(kwargs['start_time'])
-        if 'end_time' in kwargs:
-            self._config["tstop"] = self._iso8601toscfincs(kwargs['end_time'])
+            self._config["tstart"] = self._iso8601toscfincs(kwargs["start_time"])
+        if "end_time" in kwargs:
+            self._config["tstop"] = self._iso8601toscfincs(kwargs["end_time"])
         # TODO add more kwargs like tref
 
         config_file = self._cfg_dir / "sfincs.inp"
@@ -61,12 +60,8 @@ class Sfincs(ContainerizedModel):
         if cfg_dir:
             work_dir = to_absolute_path(cfg_dir)
         else:
-            timestamp = datetime.now(timezone.utc).strftime(
-                "%Y%m%d_%H%M%S"
-            )
-            work_dir = to_absolute_path(
-                f"sfincs_{timestamp}", parent=CFG.output_dir
-            )
+            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+            work_dir = to_absolute_path(f"sfincs_{timestamp}", parent=CFG.output_dir)
         # Make sure parents exist
         work_dir.parent.mkdir(parents=True, exist_ok=True)
 
@@ -82,17 +77,23 @@ class Sfincs(ContainerizedModel):
 
     def _iso8601toscfincs(self, iso8601: str) -> str:
         """Convert ISO8601 to SFINCS format."""
-        return iso8601.replace('-', '').replace(':', '').replace('T', '').replace('Z', '').split('.')[0]
+        return (
+            iso8601.replace("-", "")
+            .replace(":", "")
+            .replace("T", "")
+            .replace("Z", "")
+            .split(".")[0]
+        )
 
     def _sfincs_to_iso8601(self, dt: str) -> str:
         """Convert SFINCS format to ISO8601."""
-        dt_obj = datetime.strptime(dt, '%Y%m%d %H%M%S')
-        return dt_obj.isoformat() + 'Z'
+        dt_obj = datetime.strptime(dt, "%Y%m%d %H%M%S")
+        return dt_obj.isoformat() + "Z"
 
     @property
     def parameters(self) -> ItemsView[str, Any]:
         """Return the model parameters.
-        
+
         Exposed sfincs parameters:
             start_time: Start time of model in UTC and ISO format string
                 e.g. 'YYYY-MM-DDTHH:MM:SSZ'.
@@ -100,10 +101,10 @@ class Sfincs(ContainerizedModel):
                 e.g. 'YYYY-MM-DDTHH:MM:SSZ'.
         """
         return {
-            'start_time': self._sfincs_to_iso8601(self._config['tstart']),
-            'end_time': self._sfincs_to_iso8601(self._config['tstop'])
+            "start_time": self._sfincs_to_iso8601(self._config["tstart"]),
+            "end_time": self._sfincs_to_iso8601(self._config["tstop"]),
         }.items()
-    
+
     # container is running on port 50051, but ewc defaults to 55555
     # TODO Change Dockerfile so it runs on 55555, then this override is not needed
     def _make_bmi_instance(self) -> bmipy.Bmi:
