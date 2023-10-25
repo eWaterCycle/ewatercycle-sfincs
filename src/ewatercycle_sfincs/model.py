@@ -3,22 +3,25 @@ from collections.abc import ItemsView
 from pathlib import Path
 from datetime import datetime
 from typing import Any
+import bmipy
 
 from ewatercycle.base.model import ContainerizedModel, eWaterCycleModel
-from ewatercycle.container import ContainerImage
+from ewatercycle.container import ContainerImage, start_container
+
 from pydantic import model_validator
 
 
-class SfincsMethods(eWaterCycleModel):
-    """The eWatercycle Sfincs model.
-    
-    """
-    # TODO from forcing object write config line like `netamprfile          = precip.nc`
+class Sfincs(ContainerizedModel):
+    """The Sfincs eWaterCycle model, with the Container Registry docker image."""
+    bmi_image: ContainerImage = ContainerImage(
+        "ghcr.io/ewatercycle/sfincs-bmiserver:sfincs-v2.0.2-blockhaus-release-q2-2023"
+    )
+    # TODO generate forcing with netamprfile, netampfile, netamuamvfile nc files
 
     _config: dict = {}
 
     @model_validator(mode="after")
-    def _initialize_config(self: "SfincsMethods") -> "SfincsMethods":
+    def _initialize_config(self: "Sfincs") -> "Sfincs":
         """Load config from parameter set and update with forcing info."""
         body = self.parameter_set.config.read_text()
         for line in body.splitlines():
@@ -32,12 +35,15 @@ class SfincsMethods(eWaterCycleModel):
             self._config["netamprfile"] = str(
                 self.forcing.directory / self.forcing.pr
             )
+            # TODO add netampfile - FEWS type netcdf meteo input with atmospheric pressure in Pa.
+            # TODO add netamuamvfile - FEWS type netcdf meteo input with wind speed in both x-&y-direction in m/s.
 
         if 'start_time' in kwargs:
             # convert 2020-01-01T00:00:00Z to something like 20131201 000000
             self._config["tstart"] = self._iso8601toscfincs(kwargs['start_time'])
         if 'end_time' in kwargs:
             self._config["tstop"] = self._iso8601toscfincs(kwargs['end_time'])
+        # TODO add more kwargs like tref
 
         config_file = self._cfg_dir / "sfincs.inp"
 
@@ -70,10 +76,19 @@ class SfincsMethods(eWaterCycleModel):
             'start_time': self._sfincs_to_iso8601(self._config['tstart']),
             'end_time': self._sfincs_to_iso8601(self._config['tstop'])
         }.items()
+    
+    # container is running on port 50051, but ewc defaults to 55555
+    # TODO Change Dockerfile so it runs on 55555, then this override is not needed
+    def _make_bmi_instance(self) -> bmipy.Bmi:
+        if self.parameter_set:
+            self._additional_input_dirs.append(str(self.parameter_set.directory))
+        if self.forcing:
+            self._additional_input_dirs.append(str(self.forcing.directory))
 
-
-class Sfincs(ContainerizedModel, SfincsMethods):
-    """The Sfincs eWaterCycle model, with the Container Registry docker image."""
-    bmi_image: ContainerImage = ContainerImage(
-        "ghcr.io/ewatercycle/sfincs-bmiserver:sfincs-v2.0.2-blockhaus-release-q2-2023"
-    )
+        return start_container(
+            image=self.bmi_image,
+            work_dir=self._cfg_dir,
+            input_dirs=self._additional_input_dirs,
+            image_port=50051,
+            timeout=300,
+        )
