@@ -65,6 +65,8 @@ class Sfincs(ContainerizedModel):
         # Make sure parents exist
         work_dir.parent.mkdir(parents=True, exist_ok=True)
 
+        # TODO instead of copying parameter set and forcing to workdir
+        # adjust *file paramters in config to be paths relative to config_file
         assert self.parameter_set
         shutil.copytree(src=self.parameter_set.directory, dst=work_dir)
         if self.forcing:
