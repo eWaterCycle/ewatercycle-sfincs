@@ -22,7 +22,11 @@ class Sfincs(ContainerizedModel):
     )
     # TODO generate forcing with netamprfile, netampfile, netamuamvfile nc files
 
-    _config: dict = {}
+    _config: dict = {
+        'tref': '20000101 000000',
+        'tstart': '20000101 000000',
+        'tend': '20000101 000000',
+    }
 
     @model_validator(mode="after")
     def _initialize_config(self: "Sfincs") -> "Sfincs":
@@ -36,17 +40,24 @@ class Sfincs(ContainerizedModel):
     def _make_cfg_file(self, **kwargs) -> Path:
         """Write model configuration file."""
         if self.forcing:
-            self._config["netamprfile"] = str(self.forcing.directory / self.forcing.pr)
-            # TODO add netampfile - FEWS type netcdf meteo input with atmospheric pressure in Pa.
-            # TODO add netamuamvfile - FEWS type netcdf meteo input with wind speed in both x-&y-direction in m/s.
+            # TODO set netamprfile - FEWS type netcdf meteo input with precipitation in mm/hr.
+            # TODO set netampfile - FEWS type netcdf meteo input with atmospheric pressure in Pa.
+            # TODO set netamuamvfile - FEWS type netcdf meteo input with wind speed in both x-&y-direction in m/s.
+            pass
 
         if "start_time" in kwargs:
             # convert 2020-01-01T00:00:00Z to something like 20131201 000000
             self._config["tstart"] = self._iso8601toscfincs(kwargs["start_time"])
         if "end_time" in kwargs:
             self._config["tstop"] = self._iso8601toscfincs(kwargs["end_time"])
-        # TODO add more kwargs like tref
+        if "ref_time" in kwargs:
+            self._config["tref"] = self._iso8601toscfincs(kwargs["ref_time"])
 
+        # Make all *file parameters relative to the parameter set config file.
+        for key, val in self._config.items():
+            if key.endswith("file"):
+                self._config[key] = to_absolute_path(val, self.parameter_set.config.parent)
+        
         config_file = self._cfg_dir / "sfincs.inp"
 
         with config_file.open(mode="w") as f:
@@ -54,28 +65,6 @@ class Sfincs(ContainerizedModel):
                 f.write(f"{key:<20} = {val}\n")
 
         return config_file
-
-    def _make_cfg_dir(self, cfg_dir: Optional[str] = None, **kwargs) -> Path:
-        """Create working directory for parameter sets, forcing and sfincs config."""
-        if cfg_dir:
-            work_dir = to_absolute_path(cfg_dir)
-        else:
-            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-            work_dir = to_absolute_path(f"sfincs_{timestamp}", parent=CFG.output_dir)
-        # Make sure parents exist
-        work_dir.parent.mkdir(parents=True, exist_ok=True)
-
-        # TODO instead of copying parameter set and forcing to workdir
-        # adjust *file paramters in config to be paths relative to config_file
-        assert self.parameter_set
-        shutil.copytree(src=self.parameter_set.directory, dst=work_dir)
-        if self.forcing:
-            forcing_path = to_absolute_path(
-                self.forcing.netcdfinput, parent=self.forcing.directory
-            )
-            shutil.copy(src=forcing_path, dst=work_dir)
-
-        return work_dir
 
     def _iso8601toscfincs(self, iso8601: str) -> str:
         """Convert ISO8601 to SFINCS format."""
@@ -97,12 +86,15 @@ class Sfincs(ContainerizedModel):
         """Return the model parameters.
 
         Exposed sfincs parameters:
+            ref_time: Reference date in UTC and ISO format string
+                e.g. 'YYYY-MM-DDTHH:MM:SSZ'.
             start_time: Start time of model in UTC and ISO format string
                 e.g. 'YYYY-MM-DDTHH:MM:SSZ'.
             end_time: End time of model in  UTC and ISO format string
                 e.g. 'YYYY-MM-DDTHH:MM:SSZ'.
         """
         return {
+            "ref_time": self._sfincs_to_iso8601(self._config["tref"]),
             "start_time": self._sfincs_to_iso8601(self._config["tstart"]),
             "end_time": self._sfincs_to_iso8601(self._config["tstop"]),
         }.items()
