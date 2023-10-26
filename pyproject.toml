@@ -10,7 +10,6 @@ name = "ewatercycle-sfincs"
 description = "ewatercycle plugin for sfincs hydrodynamic model"
 readme = "README.md"
 license = "Apache-2.0"
-version = "0.0.1"
 authors = [
   { name = "Bart Schilperoort, Peter Kalverla, Stefan Verhoeven", email = "b.schilperoort@esciencecenter.nl" },
 ]
@@ -23,10 +22,11 @@ classifiers = [
   "Programming Language :: Python",
   "Programming Language :: Python :: 3 :: Only",
 ]
+dynamic = ["version"]
 
 # Include here only the dependencies for the eWaterCycle wrapped model
 dependencies = [
-  "ewatercycle",
+  "ewatercycle>=2.0.0",
 ]
 
 # This registers the plugin such that it is discoverable by eWaterCycle
