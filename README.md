@@ -10,7 +10,7 @@ https://github.com/eWaterCycle/sfincs-bmi-server
 Install this package alongside your eWaterCycle installation
 
 ```console
-pip install ewatercycle-sfincs
+pip install git+https://github.com/eWaterCycle/ewatercycle-sfincs
 ```
 
 Then Sfincs becomes available as one of the eWaterCycle models
